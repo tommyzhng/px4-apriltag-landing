@@ -28,18 +28,10 @@ void ApriltagLandingNode::DetectionsCb(const apriltag_ros::AprilTagDetectionArra
     }
 };
 
-void ApriltagLandingNode::ParsePoseToTarget(void)
+void ApriltagLandingNode::PIDLoop(void)
 {
-    // take x, y, z pose and orientation and convert to mavros_msgs::LandingTarget
-    landingTarget.header.stamp = ros::Time::now();
-    landingTarget.header.frame_id = "fcu";
-    landingTarget.target_num = 0;
-    
-    landingTarget.type = mavros_msgs::LandingTarget::VISION_FIDUCIAL;
-    landingTarget.frame = mavros_msgs::LandingTarget::LOCAL_NED;
-    landingTarget.distance = tagBig.pose.pose.pose.position.z;
-    landingTarget.pose = tagBig.pose.pose.pose;
-};
+
+}
 
 void ApriltagLandingNode::PubLandingTarget(void)
 {
@@ -50,6 +42,5 @@ void ApriltagLandingNode::PubLandingTarget(void)
 void ApriltagLandingNode::UpdateTarget(void)
 {
     // update the target
-    ParsePoseToTarget();
     PubLandingTarget();
 };

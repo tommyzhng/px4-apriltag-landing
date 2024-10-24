@@ -20,7 +20,7 @@ private:
 
     void DetectionsCb(const apriltag_ros::AprilTagDetectionArray::ConstPtr& msg);
     void PubLandingTarget(void);
-    void ParsePoseToTarget(void);
+    void PIDLoop(void);
 
     // vars to store
     apriltag_ros::AprilTagDetection tagBig;
