@@ -1,0 +1,3 @@
+<launch>
+    <node pkg="px4_apriltag_landing" type="px4_apriltag_landing_node" name="px4_apriltag_landing_node" output="screen"/>
+</launch>
