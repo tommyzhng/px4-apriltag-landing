@@ -28,9 +28,24 @@ void ApriltagLandingNode::DetectionsCb(const apriltag_ros::AprilTagDetectionArra
     }
 };
 
+void ApriltagLandingNode::ChooseTarget(void)
+{
+    //for switching between multiple tags
+    if (tagBig.pose.pose.pose.position.z > 0)
+    {
+        _tagPose.x() = tagBig.pose.pose.pose.position.x;
+        _tagPose.y() = tagBig.pose.pose.pose.position.y;
+        _tagPose.z() = tagBig.pose.pose.pose.position.z;
+    }
+}
+
 void ApriltagLandingNode::PIDLoop(void)
 {
-
+    _error = _tagPose; // try to achieve 0,0,0 distance with control loop
+    _derror = _error - _lastError;
+    _outputVel = kp * _error
+    
+    _lastError = _error;
 }
 
 void ApriltagLandingNode::PubLandingTarget(void)
