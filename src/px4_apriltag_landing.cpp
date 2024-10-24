@@ -4,7 +4,7 @@ ApriltagLandingNode::ApriltagLandingNode(ros::NodeHandle& nh)
 {
     // initialize some stuff
     tagArraySub = nh.subscribe("/tag_detections", 1, &ApriltagLandingNode::DetectionsCb, this);
-    landingTargetPub = nh.advertise<mavros_msgs::LandingTarget>("/mavros/landing_target/raw", 1);
+    localVelPub = nh.advertise<mavros_msgs::PositionTarget>("/mavros/setpoint_raw/local", 1);
 };
 
 ApriltagLandingNode::~ApriltagLandingNode()
@@ -43,19 +43,27 @@ void ApriltagLandingNode::PIDLoop(void)
 {
     _error = _tagPose; // try to achieve 0,0,0 distance with control loop
     _derror = _error - _lastError;
-    _outputVel = kp * _error
-    
+    _outputVel = kp * _error + kd * _derror;
     _lastError = _error;
 }
 
 void ApriltagLandingNode::PubLandingTarget(void)
 {
     // publish the landing target
-    landingTargetPub.publish(landingTarget);
+    mavros_msgs::PositionTarget msg;
+    msg.coordinate_frame = mavros_msgs::PositionTarget::FRAME_LOCAL_NED;
+    msg.type_mask = mavros_msgs::PositionTarget::IGNORE_PX | mavros_msgs::PositionTarget::IGNORE_PY | mavros_msgs::PositionTarget::IGNORE_PZ | mavros_msgs::PositionTarget::IGNORE_AFX | mavros_msgs::PositionTarget::IGNORE_AFY | mavros_msgs::PositionTarget::IGNORE_AFZ | mavros_msgs::PositionTarget::IGNORE_YAW_RATE;
+    msg.velocity.x = _outputVel.x();
+    msg.velocity.y = _outputVel.y();
+    msg.velocity.z = 0.1; // descend at 0.1 m/s
+    msg.yaw = _tagYaw;
+    localVelPub.publish(msg);
 };
 
 void ApriltagLandingNode::UpdateTarget(void)
 {
     // update the target
+    ChooseTarget();
+    PIDLoop();
     PubLandingTarget();
 };
