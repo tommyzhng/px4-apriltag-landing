@@ -8,6 +8,9 @@
 #include <mavros_msgs/PositionTarget.h>
 // include eigen
 #include <eigen3/Eigen/Dense>
+#include <math.h>
+#include <cmath>
+
 
 class ApriltagLandingNode
 {
@@ -22,6 +25,7 @@ private:
     ros::Subscriber tagArraySub;
     ros::Publisher localVelPub;
 
+    Eigen::Vector3f Quat2EulerAngles(const Eigen::Quaternionf& q);
     void DetectionsCb(const apriltag_ros::AprilTagDetectionArray::ConstPtr& msg);
     void PubLandingTarget(void);
     void ChooseTarget(void);
@@ -31,16 +35,20 @@ private:
     apriltag_ros::AprilTagDetection tagBig;
     apriltag_ros::AprilTagDetection tagSmol;
     Eigen::Vector3f _tagPose{0,0,0};
-    float _tagYaw{0};
+    float _tagOrientationEuler{0};
+    float _descentRate{0.1}; // m/s
 
     // pid params
-    float kp{0.1};
-    float ki{0.1};
-    float kd{0.1};
+    float _kp{0.1};
+    float _ki{0.1};
+    float _kd{0.1};
+    float _sampleTime{0.1};
+    ros::Time _lastTime{0};
     Eigen::Vector3f _error{0,0,0};
     Eigen::Vector3f _derror{0,0,0};
     Eigen::Vector3f _lastError{0,0,0};
     Eigen::Vector3f _outputVel{0,0,0};
+    float _outputYawRate{0};
 };
 
 #endif
