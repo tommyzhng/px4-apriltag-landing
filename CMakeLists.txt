@@ -16,8 +16,10 @@ find_package(catkin REQUIRED COMPONENTS
   apriltag_ros
   # Add other dependencies if needed
 )
-catkin_package(
 
+find_package(Eigen3 REQUIRED)
+
+catkin_package(
 )
 
 include_directories(
@@ -26,6 +28,7 @@ include_directories(
   include/px4_apriltag_landing
   ${catkin_INCLUDE_DIRS}
 )
+
 add_library(px4_apriltag_landing src/px4_apriltag_landing.cpp)
 target_include_directories(px4_apriltag_landing PUBLIC include)
 target_compile_features(px4_apriltag_landing PUBLIC cxx_std_17)

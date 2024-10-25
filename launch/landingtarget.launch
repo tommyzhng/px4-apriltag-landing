@@ -1,3 +1,4 @@
 <launch>
     <node pkg="px4_apriltag_landing" type="px4_apriltag_landing_node" name="px4_apriltag_landing_node" output="screen"/>
+    <rosparam file="$(find px4_apriltag_landing)/config/params.json" />
 </launch>
