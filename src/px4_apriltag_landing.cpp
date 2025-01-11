@@ -9,6 +9,8 @@ ApriltagLandingNode::ApriltagLandingNode(ros::NodeHandle& nh)
     nh.param("/pid_params/sample_time", _sampleTime, 0.1f);
 
     tagArraySub = nh.subscribe("/tag_detections", 1, &ApriltagLandingNode::DetectionsCb, this);
+    // subscribe to local position
+    localPosSub = nh.subscribe("/mavros/local_position/pose", 1, &ApriltagLandingNode::PoseCb, this);
     localVelPub = nh.advertise<mavros_msgs::PositionTarget>("/mavros/setpoint_raw/local", 1);
 };
 
@@ -49,7 +51,11 @@ void ApriltagLandingNode::DetectionsCb(const apriltag_ros::AprilTagDetectionArra
         _descentRate = 0;
         return;
     } else {
-        _descentRate = -0.1;
+        if (_dronePose.z() > 2) {
+            _descentRate = -0.3;
+        } else {
+            _descentRate = -0.1;
+        }
     }
     // store specific id to one tag member var tag36h11
     for (int i = 0; i < msg->detections.size(); i++) {
@@ -61,7 +67,12 @@ void ApriltagLandingNode::DetectionsCb(const apriltag_ros::AprilTagDetectionArra
             tagSmol = msg->detections[i];
         }
     }
-};
+}
+
+void ApriltagLandingNode::PoseCb(const geometry_msgs::PoseStamped& msg)
+{
+    _dronePose.z() = msg.pose.position.z;
+}
 
 void ApriltagLandingNode::ChooseTarget(void)
 {
@@ -88,7 +99,7 @@ void ApriltagLandingNode::PIDLoop(void)
     _outputVel = _kp * _error + _kd * _derror;      // simple PD controller for position
 
     // write another pid loop for yaw rate
-    _outputYawRate = _kp * _tagOrientationEuler; // simple P controller for yaw rate
+    //_outputYawRate = _kp * _tagOrientationEuler; // simple P controller for yaw rate
 
     _lastError = _error;
     _lastTime = now;

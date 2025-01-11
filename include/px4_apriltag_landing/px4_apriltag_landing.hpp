@@ -23,10 +23,12 @@ public:
 private:
     // private functions and member vars / private vars
     ros::Subscriber tagArraySub;
+    ros::Subscriber localPosSub;
     ros::Publisher localVelPub;
 
     Eigen::Vector3f Quat2EulerAngles(const Eigen::Quaternionf& q);
     void DetectionsCb(const apriltag_ros::AprilTagDetectionArray::ConstPtr& msg);
+    void PoseCb(const geometry_msgs::PoseStamped& msg);
     void PubLandingTarget(void);
     void ChooseTarget(void);
     void PIDLoop(void);             // simple PD Controller
@@ -34,6 +36,8 @@ private:
     // vars to store
     apriltag_ros::AprilTagDetection tagBig;
     apriltag_ros::AprilTagDetection tagSmol;
+    
+    Eigen::Vector3f _dronePose{0,0,0};
     Eigen::Vector3f _tagPose{0,0,0};
     float _tagOrientationEuler{0};
     float _descentRate{0.1}; // m/s
