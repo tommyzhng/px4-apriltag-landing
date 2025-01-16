@@ -22,7 +22,8 @@ public:
 
 private:
     // ROS
-    void PubLandingTarget(void);
+    void PubVelocityTarget(void);
+    void PubPositionTarget(void);
     ros::Subscriber tagArraySub_;
     ros::Subscriber dronePoseSub_;
     ros::Publisher localVelPub_;
@@ -38,7 +39,7 @@ private:
     Apriltag tagSmol_;
     Apriltag curTag_;
     Apriltag localTag_;
-    float numDetections_{0};
+    Eigen::Vector2i detections_{0,0};
 
     // drone 
     void DronePoseCb(const geometry_msgs::PoseStamped& msg);
@@ -59,7 +60,7 @@ private:
     void SwitchState(State state);
     void TagPoseLocal(const Apriltag& tag);
     State state_ = State::NoTag;
-
+    float altThreshold_ = 2.0;
 
     // pid
      void PIDLoop(void);             // simple PD Controller

@@ -42,8 +42,9 @@ ApriltagLandingNode::ApriltagLandingNode(ros::NodeHandle& nh)
 
 void ApriltagLandingNode::DetectionsCb(const apriltag_ros::AprilTagDetectionArray::ConstPtr& msg)
 {
-    numDetections_ = msg->detections.size();
     // store specific id -> big tag is 0, small tag is 1 in 16h5 family
+    // reset detections to 0
+    detections_ = {0,0};
     for (int i = 0; i < msg->detections.size(); i++) {
         if (msg->detections[i].id[0] == 0) {
             const auto& temp_pos = msg->detections[i].pose.pose.pose.position;
@@ -51,6 +52,7 @@ void ApriltagLandingNode::DetectionsCb(const apriltag_ros::AprilTagDetectionArra
 
             tagBig_.position = Eigen::Vector3d(temp_pos.x, temp_pos.y, temp_pos.z);
             tagBig_.orientation = Eigen::Quaterniond(temp_quat.w, temp_quat.x, temp_quat.y, temp_quat.z);
+            detections_(0) = 1;
         }
         else if (msg->detections[i].id[0] == 1)
         {
@@ -59,7 +61,9 @@ void ApriltagLandingNode::DetectionsCb(const apriltag_ros::AprilTagDetectionArra
 
             tagSmol_.position = Eigen::Vector3d(temp_pos.x, temp_pos.y, temp_pos.z);
             tagSmol_.orientation = Eigen::Quaterniond(temp_quat.w, temp_quat.x, temp_quat.y, temp_quat.z);
+            detections_(1) = 1;
         }
+
     }
 }
 
@@ -74,7 +78,7 @@ void ApriltagLandingNode::DronePoseCb(const geometry_msgs::PoseStamped& msg)
     droneOrientation_.z() = msg.pose.orientation.z;
 }
 
-void ApriltagLandingNode::PubLandingTarget(void)
+void ApriltagLandingNode::PubVelocityTarget(void)
 {
     // publish the landing target
     mavros_msgs::PositionTarget msg;
@@ -87,45 +91,61 @@ void ApriltagLandingNode::PubLandingTarget(void)
     localVelPub_.publish(msg);
 }
 
+void ApriltagLandingNode::PubPositionTarget(void)
+{
+    // publish the landing target
+    mavros_msgs::PositionTarget msg;
+    msg.coordinate_frame = mavros_msgs::PositionTarget::FRAME_BODY_NED;
+    msg.type_mask = mavros_msgs::PositionTarget::IGNORE_VX | mavros_msgs::PositionTarget::IGNORE_VY | mavros_msgs::PositionTarget::IGNORE_PZ | mavros_msgs::PositionTarget::IGNORE_AFX | mavros_msgs::PositionTarget::IGNORE_AFY | mavros_msgs::PositionTarget::IGNORE_AFZ | mavros_msgs::PositionTarget::IGNORE_YAW;
+    msg.position.x = localTag_.position.x();
+    msg.position.y = localTag_.position.y();
+    msg.velocity.z = outputVel_.z(); // descend at 0.1 m/s if detected
+    //msg.yaw_rate = outputYawRate_;
+    localVelPub_.publish(msg);
+}
+
 void ApriltagLandingNode::UpdateTarget(void)
 {
+    // TBD: some timeout/watchdog logic to ensure tag is not lost
+
     switch (state_)
     {
     case State::NoTag:
-        if (numDetections_ > 0)
+
+        if (detections_ != Eigen::Vector2i(0,0)) // if there is a detection
         {
             SwitchState(State::Approach);
         }
         break;
+
     case State::Approach:
+
         // use position control to approach the tag
+        // approach the big tag first
         curTag_ = tagBig_;
-        break;
-    case State::TrackBigTag:
-        PIDLoop();
-        PubLandingTarget();
-        if (numDetections_ == 0)
-        {
-            SwitchState(State::NoTag);
-        }
-        else if (numDetections_ > 1)
-        {
-            SwitchState(State::TrackSmolTag);
-        }
-        break;
-    case State::TrackSmolTag:
-        PIDLoop();
-        PubLandingTarget();
-        if (numDetections_ == 0)
-        {
-            SwitchState(State::NoTag);
-        }
-        else if (numDetections_ == 1)
+        TagPoseLocal(curTag_); // now localTag_ is the bigTag_s position in NED
+        outputVel_.z() = 0.3; // approach at 0.3 m/s
+
+        if (dronePosition_.z() < altThreshold_) // if drone has crossed altitude boundary
         {
             SwitchState(State::TrackBigTag);
         }
         break;
+
+    case State::TrackBigTag:
+
+        // use velocity control to track the big tag with position as secondary source
+
+        break;
+    case State::TrackSmolTag:
+
+        // use velocity control to track the small tag with position as secondary source
+
+        break;
     case State::Landed:
+
+        // cut all motors (send a disarm command)
+        
         break;
     default:
         break;
