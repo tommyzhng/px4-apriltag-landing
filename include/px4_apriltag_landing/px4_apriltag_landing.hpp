@@ -18,41 +18,58 @@ public:
     // public functions
     void UpdateTarget(void);
     ApriltagLandingNode(ros::NodeHandle& nh);
-    ~ApriltagLandingNode(); // default deconstructor
+    ~ApriltagLandingNode() = default; // default deconstructor
 
 private:
     // private functions and member vars / private vars
-    ros::Subscriber tagArraySub;
-    ros::Subscriber localPosSub;
-    ros::Publisher localVelPub;
+    ros::Subscriber tagArraySub_;
+    ros::Publisher localVelPub_;
 
-    Eigen::Vector3f Quat2EulerAngles(const Eigen::Quaternionf& q);
-    void DetectionsCb(const apriltag_ros::AprilTagDetectionArray::ConstPtr& msg);
-    void PoseCb(const geometry_msgs::PoseStamped& msg);
+    // ROS
     void PubLandingTarget(void);
-    void ChooseTarget(void);
-    void PIDLoop(void);             // simple PD Controller
 
-    // vars to store
-    apriltag_ros::AprilTagDetection tagBig;
-    apriltag_ros::AprilTagDetection tagSmol;
-    
+    // state machine
+    enum class State {
+        NoTag,
+        Approach,
+        TrackBigTag,
+        TrackSmolTag,
+        Landed
+    }
+    std::string StateFb(State state);
+    void SwitchState(State state);
+    State state_ = State::NoTag;
+    void TagPoseWorld(const apriltag_ros::AprilTagDetection& tag);
+
+    // drone 
+    void DronePoseCb(const geometry_msgs::PoseStamped& msg);
     Eigen::Vector3f _dronePose{0,0,0};
-    Eigen::Vector3f _tagPose{0,0,0};
-    float _tagOrientationEuler{0};
-    float _descentRate{0.1}; // m/s
+    float descentRate_{0.1}; // m/s
 
-    // pid params
-    float _kp{0.1};
+    // apriltag 
+    void DetectionsCb(const apriltag_ros::AprilTagDetectionArray::ConstPtr& msg);
+    apriltag_ros::AprilTagDetection tagBig_;
+    apriltag_ros::AprilTagDetection tagSmol_;
+    Eigen::Vector3f tagPose_{0,0,0};
+    float numDetections_{0};
+
+    void ChooseTarget(void);
+
+    // pid
+    float _kp{1};
     float _ki{0.1};
-    float _kd{0.1};
-    float _sampleTime{0.1};
-    ros::Time _lastTime{0};
+    float _kd{0};
+    float _sampleTime{1/30};
     Eigen::Vector3f _error{0,0,0};
-    Eigen::Vector3f _derror{0,0,0};
-    Eigen::Vector3f _lastError{0,0,0};
+    Eigen::Vector3f _ierror{0,0,0};
     Eigen::Vector3f _outputVel{0,0,0};
     float _outputYawRate{0};
+    
+    void PIDLoop(void);             // simple PD Controller
+
+
+    // other helper funcs
+    // Eigen::Vector3f Quat2EulerAngles(const Eigen::Quaternionf& q);
 };
 
 #endif

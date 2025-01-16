@@ -5,7 +5,7 @@ int main(int argc, char **argv) // argc -> # args, argv -> array of args
 {
     ros::init(argc, argv, "px4_apriltag_landing_node");
     ros::NodeHandle nh("~"); 
-    ros::Rate rate(30); // 30 Hz camera feed
+    ros::Rate rate(60);
 
     // initialize
     ApriltagLandingNode apriltagLandingNode(nh);
