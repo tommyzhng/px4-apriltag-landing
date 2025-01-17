@@ -3,6 +3,7 @@
 
 #include <ros/ros.h>
 #include <mavros_msgs/LandingTarget.h>
+#include <mavros_msgs/CommandLong.h>
 #include "apriltag_ros/AprilTagDetectionArray.h"
 #include "geometry_msgs/PoseStamped.h"
 #include <mavros_msgs/PositionTarget.h>
@@ -23,10 +24,11 @@ public:
 private:
     // ROS
     void PubVelocityTarget(void);
-    void PubPositionTarget(void);
+    void PubPositionTarget(double x, double y, double z);
     ros::Subscriber tagArraySub_;
     ros::Subscriber dronePoseSub_;
     ros::Publisher localVelPub_;
+    ros::ServiceClient commandClient_;
 
     // apriltag 
     struct Apriltag
@@ -37,7 +39,6 @@ private:
     void DetectionsCb(const apriltag_ros::AprilTagDetectionArray::ConstPtr& msg);
     Apriltag tagBig_;
     Apriltag tagSmol_;
-    Apriltag curTag_;
     Apriltag localTag_;
     Eigen::Vector2i detections_{0,0};
 
@@ -45,12 +46,13 @@ private:
     void DronePoseCb(const geometry_msgs::PoseStamped& msg);
     Eigen::Vector3d dronePosition_{0,0,0};
     Eigen::Quaterniond droneOrientation_{1,0,0,0};
-    float descentRate_{0.1}; // m/s
+
 
 
     // state machine
     enum class State {
         NoTag,
+        LostTag,
         Approach,
         TrackBigTag,
         TrackSmolTag,
@@ -60,18 +62,25 @@ private:
     void SwitchState(State state);
     void TagPoseLocal(const Apriltag& tag);
     State state_ = State::NoTag;
-    float altThreshold_ = 2.0;
+    State lastState_ = State::NoTag;
+    float apprThreshold_ = 2.0;
+    float smolThreshold_ = 1.0;
 
     // pid
-     void PIDLoop(void);             // simple PD Controller
-    float kp_{1};
-    float ki_{0.1};
-    float kd_{0};
+    void PIDLoop(Apriltag curTag);             // simple PD Controller
+    float kp_;
+    float ki_;
+    float kp1_;
+    float ki1_;
+
     float sampleTime_{1/30};
     ros::Time lastTime_;
     Eigen::Vector3d error_{0,0,0};
     Eigen::Vector3d ierror_{0,0,0};
     Eigen::Vector3d outputVel_{0,0,0};
+    
+    float lastAlt_{0};
+    float descentRate_{0.1}; // m/s
     float outputYawRate_{0};
     
 
