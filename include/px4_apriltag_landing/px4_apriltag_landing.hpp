@@ -47,8 +47,6 @@ private:
     Eigen::Vector3d dronePosition_{0,0,0};
     Eigen::Quaterniond droneOrientation_{1,0,0,0};
 
-
-
     // state machine
     enum class State {
         NoTag,
@@ -63,15 +61,15 @@ private:
     void TagPoseLocal(const Apriltag& tag);
     State state_ = State::NoTag;
     State lastState_ = State::NoTag;
-    float apprThreshold_ = 2.0;
+    float apprThreshold_ = 3.0;
     float smolThreshold_ = 1.0;
 
     // pid
     void PIDLoop(Apriltag curTag);             // simple PD Controller
-    float kp_;
-    float ki_;
-    float kp1_;
-    float ki1_;
+    float kp_{0};
+    float ki_{0};
+    float kp1_{0};
+    float ki1_{0};
 
     float sampleTime_{1/30};
     ros::Time lastTime_;
@@ -80,7 +78,9 @@ private:
     Eigen::Vector3d outputVel_{0,0,0};
     
     float lastAlt_{0};
-    float descentRate_{0.1}; // m/s
+    float bigDescentRate_{-0.4}; // m/s
+    float smolDescentRate_{-0.1}; // m/s
+    float descentRate_{0}; // m/s
     float outputYawRate_{0};
     
 

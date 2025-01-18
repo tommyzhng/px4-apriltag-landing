@@ -3,12 +3,18 @@
 ApriltagLandingNode::ApriltagLandingNode(ros::NodeHandle& nh)
 {
     // initialize some stuff
-    nh.param("/big_tag/kp", ki_, 0.1f);
+    nh.param("/big_tag/kp", kp_, 0.1f);
     nh.param("/big_tag/ki", ki_, 0.1f);
-    nh.param("/smol_tag/kp", kp1_, 0.1f);
-    nh.param("/smol_tag/ki", ki_, 0.1f);
+    nh.param("/smol_tag/kp1", kp1_, 0.1f);
+    nh.param("/smol_tag/ki1", ki1_, 0.1f);
     nh.param("/big_tag/sample_time", sampleTime_, 0.1f);
+    nh.param("/apprThreshold", apprThreshold_, 3.0f);
+    nh.param("/smolThreshold", smolThreshold_, 1.0f);
+    nh.param("/bigDescentRate", bigDescentRate_, -0.4f);
+    nh.param("/smolDescentRate", smolDescentRate_, -0.1f);
 
+    ROS_INFO("kp: %f, ki: %f", kp_, ki_);
+    
     tagArraySub_ = nh.subscribe("/tag_detections", 1, &ApriltagLandingNode::DetectionsCb, this);
     dronePoseSub_ = nh.subscribe("/mavros/local_position/pose", 1, &ApriltagLandingNode::DronePoseCb, this);
     commandClient_ = nh.serviceClient<mavros_msgs::CommandLong>("/mavros/cmd/command");
@@ -85,9 +91,10 @@ void ApriltagLandingNode::PubVelocityTarget(void)
     mavros_msgs::PositionTarget msg;
     msg.coordinate_frame = mavros_msgs::PositionTarget::FRAME_BODY_NED;
     msg.type_mask = mavros_msgs::PositionTarget::IGNORE_PX | mavros_msgs::PositionTarget::IGNORE_PY | mavros_msgs::PositionTarget::IGNORE_PZ | mavros_msgs::PositionTarget::IGNORE_AFX | mavros_msgs::PositionTarget::IGNORE_AFY | mavros_msgs::PositionTarget::IGNORE_AFZ | mavros_msgs::PositionTarget::IGNORE_YAW;
-    msg.velocity.x = outputVel_.x();
-    msg.velocity.y = outputVel_.y();
-    msg.velocity.z = outputVel_.z(); // descend at 0.1 m/s if detected
+    // print out the velocity
+    msg.velocity.y = -outputVel_.x();
+    msg.velocity.x = -outputVel_.y();
+    msg.velocity.z = outputVel_.z();
     //msg.yaw_rate = outputYawRate_;
     localVelPub_.publish(msg);
 }
@@ -135,6 +142,7 @@ void ApriltagLandingNode::UpdateTarget(void)
             if (detections_(0) == 1)
             {
                 SwitchState(State::TrackBigTag);
+                descentRate_ = bigDescentRate_;
                 break;
             }
             break;
@@ -142,12 +150,14 @@ void ApriltagLandingNode::UpdateTarget(void)
             if (detections_(1) == 1)
             {
                 SwitchState(State::TrackSmolTag);
+                descentRate_ = 0;
                 break;
             }
             break;
         default:
             break;
         }   
+        break;
 
     case State::Approach:
 
@@ -160,14 +170,16 @@ void ApriltagLandingNode::UpdateTarget(void)
             lastAlt_ = dronePosition_.z(); // last alt since tag detection for lost tag state
         }
         // still approach the tag if its lost
+        ROS_INFO("current state: %s", StateFb(state_).c_str());
         ROS_INFO("Tag position in NED: %f, %f, %f", localTag_.position.x(), localTag_.position.y(), localTag_.position.z());
         PubPositionTarget(localTag_.position.x(), localTag_.position.y(), apprThreshold_);
 
-        if (dronePosition_.z() <= apprThreshold_ && detections_(0) == 1) // if drone has crossed altitude boundary and has detected a big tag
+        if (dronePosition_.z() <= apprThreshold_+0.5 && detections_(0) == 1) // if drone has crossed altitude boundary and has detected a big tag
         {
             SwitchState(State::TrackBigTag);
-            descentRate_ = -0.4;
+            descentRate_ = bigDescentRate_;
         }
+
         break;
 
     case State::TrackBigTag:
@@ -178,11 +190,14 @@ void ApriltagLandingNode::UpdateTarget(void)
         if ((detections_(0)) != 1)
         {
             SwitchState(State::LostTag);
+            descentRate_ = 0.0;
+            PubVelocityTarget();
             break;  
         }
         
         // controller loop
         PIDLoop(tagBig_);
+        // print hi
         PubVelocityTarget();
         TagPoseLocal(tagBig_); // as a backup for lost tag state
         lastAlt_ = dronePosition_.z(); // last alt since tag detection for lost tag state
@@ -193,7 +208,11 @@ void ApriltagLandingNode::UpdateTarget(void)
             // turn gains down (very professional adaptive controller T-T)
             kp_ = kp1_;
             ki_ = ki1_;
-            descentRate_ = -0.15;
+            descentRate_ = smolDescentRate_;
+        }
+        else if (detections_(1) != 1)
+        {
+            descentRate_ = 0;
         }
         break;
 
@@ -208,6 +227,8 @@ void ApriltagLandingNode::UpdateTarget(void)
             if (dronePosition_.z() > 0.5)
             {
                 SwitchState(State::LostTag);
+                descentRate_ = 0.0;
+                PubVelocityTarget();
             }
             break;  
         }
@@ -223,9 +244,9 @@ void ApriltagLandingNode::UpdateTarget(void)
             // best effort to center the drone on the tag
             if (std::abs(tagSmol_.position.x()) < 0.1 && std::abs(tagSmol_.position.y()) < 0.1){
                 SwitchState(State::Landed);
-                descentRate_ = 0.5;
+                descentRate_ = -0.5;
             } else {
-                descentRate_ = 0.01;
+                descentRate_ = -0.01;
             }
         }
         
@@ -279,8 +300,11 @@ void ApriltagLandingNode::PIDLoop(Apriltag curTag)
     double dt =  (now - lastTime_).toSec();
     error_ = curTag.position;                       // try to achieve 0,0,0 distance with control loop
     ierror_ = error_ * dt;                          // i
-    outputVel_ = ki_ * error_ + ki_ * ierror_;      // simple PI controller for position
+    outputVel_ = kp_ * error_ + ki_ * ierror_;      // simple PI controller for position
     outputVel_.z() = descentRate_;                 // descend at set rate
+    ROS_INFO("error: %f, %f, %f", error_.x(), error_.y(), error_.z());
+    // gains
+    ROS_INFO("kp: %f, ki: %f", kp_, ki_);
 
     // write another pid loop for yaw rate
     outputYawRate_ = ki_ * curTag.position.z(); // simple P controller for yaw rate
@@ -295,6 +319,9 @@ std::string ApriltagLandingNode::StateFb(State state)
     {
     case State::NoTag:
         return "NoTag";
+        break;
+    case State::LostTag:
+        return "LostTag";
         break;
     case State::Approach:  
         return "Approach";

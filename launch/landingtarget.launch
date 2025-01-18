@@ -1,6 +1,6 @@
 <launch>
     <node pkg="px4_apriltag_landing" type="px4_apriltag_landing_node" name="px4_apriltag_landing_node" output="screen"/>
-    <rosparam file="$(find px4_apriltag_landing)/config/params.json" />
+    <rosparam command="load" file="$(find px4_apriltag_landing)/config/params.json"/>
 
     <include file="$(find apriltag_ros)/launch/continuous_detection.launch" />
     <include file="$(find gstreamer_ros_bridge)/launch/camera_bridge.launch" />

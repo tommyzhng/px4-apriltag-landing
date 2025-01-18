@@ -4,9 +4,8 @@
         "ki": 0.0,
         "sample_time": 0.033333
     },
-    "smol_tag": {
-        "kp": 0.8,
-        "ki": 0.0,
-        "sample_time": 0.033333
-    }
+    "apprThreshold": 3.5,
+    "smolThreshold": 1,
+    "bigDescentRate": -0.2,
+    "smolDescentRate": -0.1
 }
