@@ -4,14 +4,20 @@
 #include <ros/ros.h>
 #include <mavros_msgs/LandingTarget.h>
 #include <mavros_msgs/CommandLong.h>
-#include "apriltag_ros/AprilTagDetectionArray.h"
-#include "geometry_msgs/PoseStamped.h"
 #include <mavros_msgs/PositionTarget.h>
+#include <mavros_msgs/GlobalPositionTarget.h>
+#include <mavros_msgs/ParamSet.h>
+#include "geometry_msgs/PoseStamped.h"
+#include "nav_msgs/Odometry.h"
+#include "std_msgs/Float64.h"
+#include "sensor_msgs/NavSatFix.h"
+
+#include "apriltag_ros/AprilTagDetectionArray.h"
+
+
 // include eigen
 #include <eigen3/Eigen/Dense>
 #include <math.h>
-#include <cmath>
-
 
 class ApriltagLandingNode
 {
@@ -19,16 +25,18 @@ public:
     // public functions
     void UpdateTarget(void);
     ApriltagLandingNode(ros::NodeHandle& nh);
-    ~ApriltagLandingNode() = default; // default deconstructor
+    ~ApriltagLandingNode(); 
 
 private:
-    // ROS
-    void PubVelocityTarget(void);
-    void PubPositionTarget(double x, double y, double z);
+    // ROS subs and pubs
     ros::Subscriber tagArraySub_;
     ros::Subscriber dronePoseSub_;
-    ros::Publisher localVelPub_;
+    ros::Subscriber droneAbsPoseSub_;
+    ros::Subscriber droneHeadingSub_;
+    ros::Publisher localSetpointPub_;
+    ros::Publisher globalSetpointPub_;
     ros::ServiceClient commandClient_;
+    ros::ServiceClient setParam_;
 
     // apriltag 
     struct Apriltag
@@ -39,13 +47,24 @@ private:
     void DetectionsCb(const apriltag_ros::AprilTagDetectionArray::ConstPtr& msg);
     Apriltag tagBig_;
     Apriltag tagSmol_;
-    Apriltag localTag_;
+    Apriltag globalTag_;
     Eigen::Vector2i detections_{0,0};
 
     // drone 
-    void DronePoseCb(const geometry_msgs::PoseStamped& msg);
+    void DronePoseCb(const nav_msgs::Odometry& msg);
+    void DroneAbsPoseCb(const sensor_msgs::NavSatFix& msg);
+    void DroneHeadingCb(const std_msgs::Float64& msg);
+    void PubVelocityTarget(void);
+    void PubPositionTarget(double x, double y, double z);
+    void PubGlobalTarget(double lat, double lon, double z);
+    void CallParam(const std::string& param_id, double value);
     Eigen::Vector3d dronePosition_{0,0,0};
+    Eigen::Vector3d dronePositionGlobal_{0,0,0};
     Eigen::Quaterniond droneOrientation_{1,0,0,0};
+    double droneHeading_{0};
+    int lat_factor_{111320};
+    int long_factor_{40075000};
+
 
     // state machine
     enum class State {
@@ -58,7 +77,7 @@ private:
     };
     std::string StateFb(State state);
     void SwitchState(State state);
-    void TagPoseLocal(const Apriltag& tag);
+    void TagPoseGlobal(const Apriltag& tag);
     State state_ = State::NoTag;
     State lastState_ = State::NoTag;
     float apprThreshold_ = 3.0;
@@ -78,6 +97,7 @@ private:
     Eigen::Vector3d outputVel_{0,0,0};
     
     float lastAlt_{0};
+    float apprDescentRate_{-0.5}; // m/s
     float bigDescentRate_{-0.4}; // m/s
     float smolDescentRate_{-0.1}; // m/s
     float descentRate_{0}; // m/s

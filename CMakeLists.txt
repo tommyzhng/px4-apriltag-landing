@@ -10,10 +10,12 @@ project(px4_apriltag_landing)
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   std_msgs
+  nav_msgs
   sensor_msgs
   image_transport
   cv_bridge
   apriltag_ros
+  tf2_ros
   # Add other dependencies if needed
 )
 
