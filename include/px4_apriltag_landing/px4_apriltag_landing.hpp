@@ -7,6 +7,7 @@
 #include <mavros_msgs/PositionTarget.h>
 #include <mavros_msgs/GlobalPositionTarget.h>
 #include <mavros_msgs/ParamSet.h>
+#include <mavros_msgs/CommandLong.h>
 #include "geometry_msgs/PoseStamped.h"
 #include "nav_msgs/Odometry.h"
 #include "std_msgs/Float64.h"
@@ -43,12 +44,15 @@ private:
     {
         Eigen::Vector3d position;
         Eigen::Quaterniond orientation{1,0,0,0};
+        float time;
     };
     void DetectionsCb(const apriltag_ros::AprilTagDetectionArray::ConstPtr& msg);
+    bool TimeoutWatchdog(Apriltag curTag);
     Apriltag tagBig_;
     Apriltag tagSmol_;
     Apriltag globalTag_;
     Eigen::Vector2i detections_{0,0};
+    float timeoutThreshold_{1.0};
 
     // drone 
     void DronePoseCb(const nav_msgs::Odometry& msg);
@@ -58,6 +62,7 @@ private:
     void PubPositionTarget(double x, double y, double z);
     void PubGlobalTarget(double lat, double lon, double z);
     void CallParam(const std::string& param_id, double value);
+    void ArmDisarm(int arm);
     Eigen::Vector3d dronePosition_{0,0,0};
     Eigen::Vector3d dronePositionGlobal_{0,0,0};
     Eigen::Quaterniond droneOrientation_{1,0,0,0};
@@ -87,14 +92,13 @@ private:
     void PIDLoop(Apriltag curTag);             // simple PD Controller
     float kp_{0};
     float ki_{0};
-    float kp1_{0};
-    float ki1_{0};
 
     float sampleTime_{1/30};
     ros::Time lastTime_;
     Eigen::Vector3d error_{0,0,0};
     Eigen::Vector3d ierror_{0,0,0};
     Eigen::Vector3d outputVel_{0,0,0};
+    Eigen::Vector3d intLimit_{0.8,0.8,0.8};
     
     float lastAlt_{0};
     float apprDescentRate_{-0.5}; // m/s

@@ -1,12 +1,13 @@
 {
     "big_tag": {
-        "kp": 0.8,
-        "ki": 0.2,
+        "kp": 1.0,
+        "ki": 0.4,
         "sample_time": 0.033333
     },
     "apprThreshold": 3,
     "smolThreshold": 1.5,
     "apprDescentRate": -0.3,
     "bigDescentRate": -0.2,
-    "smolDescentRate": -0.08
+    "smolDescentRate": -0.1,
+    "timeoutThreshold": 1.0
 }
