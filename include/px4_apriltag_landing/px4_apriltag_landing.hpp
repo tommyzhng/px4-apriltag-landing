@@ -90,13 +90,15 @@ private:
 
     // pid
     void PIDLoop(Apriltag curTag);             // simple PD Controller
-    float kp_{0};
-    float ki_{0};
+    float kp_{0.0} , ki_{0.0}, kd_{0.0};
+    float kp1_{0.0}, ki1_{0.0}, kd1_{0.0};
 
     float sampleTime_{1/30};
     ros::Time lastTime_;
     Eigen::Vector3d error_{0,0,0};
     Eigen::Vector3d ierror_{0,0,0};
+    Eigen::Vector3d derror_{0,0,0};
+    Eigen::Vector3d lastError_{0,0,0};
     Eigen::Vector3d outputVel_{0,0,0};
     Eigen::Vector3d intLimit_{0.8,0.8,0.8};
     

@@ -5,15 +5,18 @@ ApriltagLandingNode::ApriltagLandingNode(ros::NodeHandle& nh)
     // initialize some stuff
     nh.param("/big_tag/kp", kp_, 0.1f);
     nh.param("/big_tag/ki", ki_, 0.1f);
-    nh.param("/big_tag/sample_time", sampleTime_, 0.1f);
+    nh.param("/big_tag/kd", kd_, 0.1f);
+    nh.param("/smol_tag/kp", kp1_, 0.1f);
+    nh.param("/smol_tag/ki", ki1_, 0.1f);
+    nh.param("/smol_tag/kd", kd1_, 0.1f);
+
+    nh.param("/sample_time", sampleTime_, 0.1f);
     nh.param("/apprThreshold", apprThreshold_, 3.0f);
     nh.param("/smolThreshold", smolThreshold_, 1.0f);
     nh.param("/apprDescentRate", apprDescentRate_, -0.5f);
     nh.param("/bigDescentRate", bigDescentRate_, -0.4f);
     nh.param("/smolDescentRate", smolDescentRate_, -0.1f);
     nh.param("/timeoutThreshold", timeoutThreshold_, 1.0f);
-
-    ROS_INFO("kp: %f, ki: %f", kp_, ki_);
     
     tagArraySub_ = nh.subscribe("/tag_detections", 1, &ApriltagLandingNode::DetectionsCb, this);
     dronePoseSub_ = nh.subscribe("/mavros/global_position/local", 1, &ApriltagLandingNode::DronePoseCb, this);
@@ -27,8 +30,7 @@ ApriltagLandingNode::ApriltagLandingNode(ros::NodeHandle& nh)
 
 ApriltagLandingNode::~ApriltagLandingNode()
 {
-    CallParam("MPC_Z_VEL_MAX_DN", 2.0);
-    CallParam("MPC_XY_VEL_MAX", 5.0);
+    CallParam("MPC_Z_VEL_MAX_DN", 1.5);
 }
 
 // Eigen::Vector3d ApriltagLandingNode::Quat2EulerAngles(const Eigen::Quaternionf& q) {
@@ -214,8 +216,9 @@ void ApriltagLandingNode::UpdateTarget(void)
 
     case State::LostTag: {
     
-        // if tag is lost, go to last known position
-        PubGlobalTarget(globalTag_.position.x(), globalTag_.position.y(), lastAlt_);
+        // if tag is lost, stop descending (maybe even ascend a bit)
+        outputVel_.z() = 0.05;
+        PubVelocityTarget();
 
         switch (lastState_)
         {
@@ -231,7 +234,7 @@ void ApriltagLandingNode::UpdateTarget(void)
             if (detections_(1) == 1) {
                 SwitchState(State::TrackSmolTag);
                 lastState_ = State::TrackSmolTag;
-                descentRate_ = 0;
+                descentRate_ = smolDescentRate_;
                 break;
             }
             break;
@@ -287,8 +290,9 @@ void ApriltagLandingNode::UpdateTarget(void)
         if (dronePosition_.z() < smolThreshold_ && detections_(1) == 1) { // if drone has crossed altitude boundary and has detected a small tag
             SwitchState(State::TrackSmolTag);
             lastState_ = State::TrackSmolTag;
-            kp_ = kp_ * 0.6;
-            ki_ = ki_ * 0.6;
+            kp_ = kp1_;
+            ki_ = ki1_;
+            kd_ = kd1_;
             descentRate_ = smolDescentRate_;
         }
         else if (dronePosition_.z() < smolThreshold_ && detections_(1) != 1) {
@@ -306,12 +310,9 @@ void ApriltagLandingNode::UpdateTarget(void)
         TagPoseGlobal(tagSmol_); // as a backup for lost tag state
         bool lostTagSmol = TimeoutWatchdog(tagSmol_);
         if (lostTagSmol == true) {
-            // if drone is not close to ground, switch
-            if (dronePosition_.z() > 1) {
-                SwitchState(State::LostTag);
-                descentRate_ = 0.0;
-                PubVelocityTarget();
-            }
+            SwitchState(State::LostTag);
+            descentRate_ = 0.0;
+            PubVelocityTarget();
             break;  
         }
 
@@ -322,9 +323,10 @@ void ApriltagLandingNode::UpdateTarget(void)
         if (dronePosition_.z() < 0.2) { // if drone is close to the ground
             // best effort to center the drone on the tag
             if (std::abs(tagSmol_.position.x()) < 0.1 && std::abs(tagSmol_.position.y()) < 0.1){
+                descentRate_ = smolDescentRate_;
                 SwitchState(State::Landed);
             } else {
-                descentRate_ = 0.2;
+                descentRate_ = 0.01;
             }  
         }
         break;
@@ -337,17 +339,6 @@ void ApriltagLandingNode::UpdateTarget(void)
         ROS_INFO("Landing...");
         ArmDisarm(0);
         PubVelocityTarget();
-        //PubPositionTarget(dronePosition_.x(), dronePosition_.y(), -5);
-
-        // mavros_msgs::CommandLong disarm_cmd;
-        // disarm_cmd.request.command = mavros_msgs::CommandLong::Request::MAV_CMD_COMPONENT_ARM_DISARM;
-        // disarm_cmd.request.param1 = 0;      // Disarm (0 for disarm, 1 for arm)
-        // disarm_cmd.request.param2 = 21196; // Force disarm code (bypass checks)
-
-        // if (commandClient_.call(disarm_cmd) && disarm_cmd.response.success)
-        // {
-        //     ROS_INFO("Successfully landed");
-        // }
 
         // shutdown node
         ROS_INFO("Hope you landed on target :)");
@@ -379,13 +370,15 @@ void ApriltagLandingNode::PIDLoop(Apriltag curTag)
     error_ = curTag.position;                       // try to achieve 0,0,0 distance with control loop
     ierror_ = error_ * dt;                          // i
     ierror_ = ierror_.cwiseMin(intLimit_).cwiseMax(-intLimit_); // clamp integral term
+    derror_ = (error_ - lastError_) / dt;           // d
 
     outputVel_ = kp_ * error_ + ki_ * ierror_;      // simple PI controller for position
     outputVel_.z() = descentRate_;                 // descend at set rate
 
+    lastError_ = error_;
 
     // diagnostics
-    ROS_INFO("kp: %f, ki: %f", kp_, ki_);
+    ROS_INFO("kp: %f, ki: %f, kd: %f", kp_, ki_, kd_);
     ROS_INFO("descnet rate: %f", descentRate_);
     ROS_INFO("vel out: %f, %f, %f", outputVel_.x(), outputVel_.y(), outputVel_.z());
 

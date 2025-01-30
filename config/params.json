@@ -2,10 +2,16 @@
     "big_tag": {
         "kp": 1.0,
         "ki": 0.4,
-        "sample_time": 0.033333
+        "kd": 0.0
     },
+    "smol_tag": {
+        "kp": 0.35,
+        "ki": 0.3,
+        "kd": 0.5
+    },
+    "sample_time": 0.033333333,
     "apprThreshold": 3,
-    "smolThreshold": 1.5,
+    "smolThreshold": 1,
     "apprDescentRate": -0.3,
     "bigDescentRate": -0.2,
     "smolDescentRate": -0.1,
